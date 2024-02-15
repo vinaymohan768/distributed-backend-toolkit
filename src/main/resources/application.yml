@@ -1,0 +1,98 @@
+spring:
+  application:
+    name: distributed-backend-toolkit
+
+  # ── PostgreSQL / HikariCP ──────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:toolkitdb}
+    username: ${POSTGRES_USER:toolkit}
+    password: ${POSTGRES_PASSWORD:toolkit}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ToolkitPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000       # 3s — fail fast, don't queue forever
+      idle-timeout: 600000           # 10m
+      max-lifetime: 1800000          # 30m — recycle before server-side timeout
+      leak-detection-threshold: 5000 # warn if connection held > 5s
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 200ms
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        linger.ms: 5
+        batch.size: 65536
+        compression.type: lz4
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:toolkit-group}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false      # manual commit after processing
+      max-poll-records: 500
+      properties:
+        fetch.min.bytes: 1024
+        fetch.max.wait.ms: 100
+
+  # ── Cache ──────────────────────────────────────────────────────────────────
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=10000,expireAfterWrite=60s
+    cache-names:
+      - telemetry-l1
+      - device-profiles
+
+# ── Async thread pool ──────────────────────────────────────────────────────
+toolkit:
+  async:
+    core-pool-size: 8
+    max-pool-size: 32
+    queue-capacity: 1000
+    thread-name-prefix: "toolkit-async-"
+  kafka:
+    topics:
+      events: device-events
+      results: device-results
+    batch-listener: true
+    concurrency: 3               # partitions / consumer threads
+  cache:
+    l2-ttl-seconds: 300          # Redis TTL
+    l1-ttl-seconds: 60           # Caffeine TTL
+  db:
+    batch-insert-size: 500
+
+# ── Actuator ───────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+server:
+  port: 8080

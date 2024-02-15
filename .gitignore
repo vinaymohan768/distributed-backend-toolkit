@@ -1,0 +1,7 @@
+target/
+*.class
+.env
+.DS_Store
+*.iml
+.idea/
+.mvn/

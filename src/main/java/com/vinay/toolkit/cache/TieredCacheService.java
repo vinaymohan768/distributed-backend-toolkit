@@ -20,7 +20,7 @@ import java.util.concurrent.Callable;
  *
  * Read:  L1 hit → return. Miss → check L2 → backfill L1 → return.
  *        Full miss → load from source → populate both tiers.
- * Write: invalidate L1 + L2. Write-through is intentionally skipped —
+ * Write: invalidate L1 + L2. Write-through is intentionally skipped :
  *        it causes coherency bugs across JVM instances. Invalidate instead.
  */
 @Slf4j
@@ -55,7 +55,7 @@ public class TieredCacheService {
 
     /** Read from L1 → L2 → loader. Populates tiers on miss. */
     public <T> Optional<T> get(String key, TypeReference<T> type, Callable<T> loader) {
-        // L1 — Caffeine
+        // L1: Caffeine
         Cache l1 = caffeineCacheManager.getCache(L1_CACHE_NAME);
         if (l1 != null) {
             Cache.ValueWrapper wrapped = l1.get(key);
@@ -68,7 +68,7 @@ public class TieredCacheService {
             }
         }
 
-        // L2 — Redis
+        // L2: Redis
         String redisValue = redisTemplate.opsForValue().get(key);
         if (redisValue != null) {
             l2HitCounter.increment();
@@ -83,7 +83,7 @@ public class TieredCacheService {
             }
         }
 
-        // Full miss — load from source
+        // Full miss: load from source
         missCounter.increment();
         log.debug("Cache miss | key={}", key);
         try {
@@ -102,9 +102,9 @@ public class TieredCacheService {
     public <T> void put(String key, T value) {
         try {
             String json = objectMapper.writeValueAsString(value);
-            // L2 first — shared state is authoritative
+            // L2 first: shared state is authoritative
             redisTemplate.opsForValue().set(key, json, Duration.ofSeconds(l2TtlSeconds));
-            // L1 — local fast path
+            // L1: local fast path
             Cache l1 = caffeineCacheManager.getCache(L1_CACHE_NAME);
             if (l1 != null) l1.put(key, value);
         } catch (Exception e) {
@@ -120,11 +120,11 @@ public class TieredCacheService {
         log.debug("Evicted | key={}", key);
     }
 
-    /** Atomic Redis increment — O(1), no lock needed. Sets TTL on first increment. */
+    /** Atomic Redis increment: O(1), no lock needed. Sets TTL on first increment. */
     public long increment(String key, long delta, Duration ttl) {
         Long result = redisTemplate.opsForValue().increment(key, delta);
         if (result != null && result == delta) {
-            // First increment — set TTL (avoids counter living forever)
+            // First increment: set TTL (avoids counter living forever)
             redisTemplate.expire(key, ttl);
         }
         return result != null ? result : 0L;

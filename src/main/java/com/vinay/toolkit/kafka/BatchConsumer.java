@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * Batch Kafka consumer with manual AckMode.BATCH.
  *
- * Offsets are committed only after the full batch is processed and persisted —
+ * Offsets are committed only after the full batch is processed and persisted :
  * at-least-once delivery. Downstream writes must be idempotent (ON CONFLICT DO NOTHING).
  * Deserialization errors skip the bad record without failing the whole batch.
  */

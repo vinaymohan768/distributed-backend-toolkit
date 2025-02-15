@@ -17,7 +17,7 @@ import java.util.Map;
  * PostgreSQL repository optimized for high-throughput event ingestion.
  *
  * batchUpdate at page_size=500 cuts DB round-trips by ~500x vs row-at-a-time.
- * ON CONFLICT DO NOTHING makes inserts idempotent — safe for Kafka at-least-once redelivery.
+ * ON CONFLICT DO NOTHING makes inserts idempotent: safe for Kafka at-least-once redelivery.
  * Timestamp in every WHERE clause enables partition pruning on the monthly range partition.
  * readOnly=true on reads lets HikariCP route to a read replica when configured.
  */
@@ -77,7 +77,7 @@ public class BatchRepository {
     }
 
     /**
-     * Retrieve recent events for a device — exploits composite index (device_id, event_timestamp DESC).
+     * Retrieve recent events for a device: exploits composite index (device_id, event_timestamp DESC).
      * readOnly=true signals the connection pool to use a read replica if configured.
      */
     @Transactional(readOnly = true)

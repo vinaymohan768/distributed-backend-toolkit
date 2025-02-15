@@ -1,4 +1,4 @@
--- schema.sql — distributed-backend-toolkit
+-- schema.sql: distributed-backend-toolkit
 
 -- ── Events table (range-partitioned by month) ──────────────────────────────
 CREATE TABLE IF NOT EXISTS events (
@@ -21,16 +21,16 @@ CREATE TABLE IF NOT EXISTS events_2026_06
 CREATE TABLE IF NOT EXISTS events_2026_07
     PARTITION OF events FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
 
--- Composite B-tree index — covers (device_id, event_timestamp DESC) lookups
+-- Composite B-tree index: covers (device_id, event_timestamp DESC) lookups
 -- Used by getRecentEvents: index-only scan, no heap access
 CREATE INDEX IF NOT EXISTS idx_events_device_time
     ON events (device_id, event_timestamp DESC);
 
--- Partial index for critical events — small fraction of rows, fast dashboard queries
+-- Partial index for critical events: small fraction of rows, fast dashboard queries
 CREATE INDEX IF NOT EXISTS idx_events_critical
     ON events (event_timestamp DESC)
     WHERE event_type = 'critical';
 
--- GIN index on JSONB payload — for ad-hoc JSON field queries
+-- GIN index on JSONB payload: for ad-hoc JSON field queries
 CREATE INDEX IF NOT EXISTS idx_events_payload
     ON events USING GIN (payload);

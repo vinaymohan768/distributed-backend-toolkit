@@ -36,7 +36,7 @@ class AsyncTaskProcessorTest {
         // No "id" key → validate throws → exceptionally returns raw input → transform runs
         Map<String, Object> badInput = Map.of("value", 99);
 
-        // Should not throw — pipeline handles the failure
+        // Should not throw: pipeline handles the failure
         Map<String, Object> result = processor.processWithPipeline(badInput)
                 .exceptionally(ex -> Map.of("degraded", true))
                 .get();

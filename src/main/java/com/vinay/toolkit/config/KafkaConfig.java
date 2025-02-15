@@ -21,7 +21,7 @@ import java.util.Map;
  *
  * Producer: idempotent (acks=all), linger.ms=5, batch.size=64KB, LZ4.
  * Consumer: batch listener, AckMode.BATCH, manual offset commit, concurrency=3.
- * Topics: 6 partitions — keyed by device_id for per-device ordering.
+ * Topics: 6 partitions: keyed by device_id for per-device ordering.
  */
 @Configuration
 public class KafkaConfig {
@@ -71,7 +71,7 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(config);
     }
 
-    /** Batch listener factory — delivers List<ConsumerRecord> per poll. */
+    /** Batch listener factory: delivers List<ConsumerRecord> per poll. */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =

@@ -12,7 +12,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 /**
  * Thread pool for @Async methods.
  *
- * core=8, max=32, queue=1000. CallerRunsPolicy on saturation — the calling
+ * core=8, max=32, queue=1000. CallerRunsPolicy on saturation: the calling
  * thread executes the task rather than dropping it, giving natural backpressure
  * without data loss (unlike AbortPolicy which throws and loses work).
  */

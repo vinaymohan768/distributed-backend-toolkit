@@ -48,7 +48,7 @@ public class BenchmarkController {
 
     /**
      * Send N events to Kafka and report throughput.
-     * Events are keyed by device_id — partition affinity in action.
+     * Events are keyed by device_id: partition affinity in action.
      */
     @PostMapping("/benchmark/kafka/produce")
     public Map<String, Object> benchmarkProduce(

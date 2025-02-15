@@ -12,9 +12,9 @@ spring:
       pool-name: ToolkitPool
       maximum-pool-size: 20
       minimum-idle: 5
-      connection-timeout: 3000       # 3s — fail fast, don't queue forever
+      connection-timeout: 3000       # 3s: fail fast, don't queue forever
       idle-timeout: 600000           # 10m
-      max-lifetime: 1800000          # 30m — recycle before server-side timeout
+      max-lifetime: 1800000          # 30m: recycle before server-side timeout
       leak-detection-threshold: 5000 # warn if connection held > 5s
 
   # ── Redis ──────────────────────────────────────────────────────────────────

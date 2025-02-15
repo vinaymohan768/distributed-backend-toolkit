@@ -32,7 +32,7 @@ public class AsyncTaskProcessor {
 
     /**
      * Process a single task asynchronously.
-     * Runs on the taskExecutor thread pool — does not block the calling thread.
+     * Runs on the taskExecutor thread pool: does not block the calling thread.
      */
     @Async("taskExecutor")
     public CompletableFuture<Map<String, Object>> processAsync(Map<String, Object> task) {
@@ -43,7 +43,7 @@ public class AsyncTaskProcessor {
 
     /**
      * Fan-out: process a list of tasks in parallel, collect results.
-     * Uses allOf() to join — waits for ALL tasks to complete before returning.
+     * Uses allOf() to join: waits for ALL tasks to complete before returning.
      *
      * For fire-and-forget (don't wait for results), drop the join() call.
      */
@@ -72,7 +72,7 @@ public class AsyncTaskProcessor {
         return CompletableFuture
                 .supplyAsync(() -> validate(input))               // Stage 1: validate
                 .thenApplyAsync(this::enrich)                     // Stage 2: enrich metadata
-                .exceptionally(ex -> {                            // Enrich failed — degrade gracefully
+                .exceptionally(ex -> {                            // Enrich failed: degrade gracefully
                     log.warn("Enrichment failed, using raw input: {}", ex.getMessage());
                     return input;
                 })
@@ -101,7 +101,7 @@ public class AsyncTaskProcessor {
     }
 
     private Map<String, Object> enrich(Map<String, Object> input) {
-        // Add metadata — in production this calls an external service
+        // Add metadata: in production this calls an external service
         return new java.util.HashMap<>(input) {{
             put("enriched", true);
             put("enriched_at", System.currentTimeMillis());

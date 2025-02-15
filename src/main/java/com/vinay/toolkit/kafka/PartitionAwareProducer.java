@@ -19,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * This gives per-entity ordering guarantees and lets consumers maintain
  * in-memory state (sliding windows, sessions) without distributed locking.
- * Sends are async — callers get a CompletableFuture and decide whether to await.
+ * Sends are async: callers get a CompletableFuture and decide whether to await.
  */
 @Slf4j
 @Component
@@ -44,7 +44,7 @@ public class PartitionAwareProducer {
 
     /**
      * Send a single event keyed by entityId.
-     * Returns CompletableFuture — caller decides whether to await or fire-and-forget.
+     * Returns CompletableFuture: caller decides whether to await or fire-and-forget.
      */
     public CompletableFuture<SendResult<String, String>> send(
             String topic, String entityId, Object payload) {
@@ -77,7 +77,7 @@ public class PartitionAwareProducer {
     }
 
     /**
-     * Batch send — fires all sends in parallel and waits for all to complete.
+     * Batch send: fires all sends in parallel and waits for all to complete.
      * Leverages producer linger.ms + batch.size for automatic micro-batching.
      */
     public CompletableFuture<Void> sendBatch(String topic, List<Map.Entry<String, Object>> events) {

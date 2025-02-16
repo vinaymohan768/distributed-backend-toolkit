@@ -1,7 +1,17 @@
+# Build output
 target/
 *.class
+*.jar
+
+# Environment — never commit secrets
 .env
+
+# Editor / OS
 .DS_Store
 *.iml
 .idea/
-.mvn/
+.vscode/
+*.swp
+
+# Maven wrapper jar
+.mvn/wrapper/maven-wrapper.jar

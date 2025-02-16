@@ -15,25 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Batch Kafka consumer with manual offset acknowledgment.
+ * Batch Kafka consumer with manual AckMode.BATCH.
  *
- * Batch processing rationale:
- *   Processing records one-at-a-time has fixed per-call overhead for DB writes,
- *   Redis ops, and Kafka commit RPCs. Batch processing amortizes this overhead:
- *   - DB: batch INSERT vs N individual INSERTs (10–50x throughput improvement)
- *   - Kafka: one offset commit per batch vs one per record
- *   - Thread utilization: fewer context switches, better CPU cache usage
- *
- * Manual acknowledgment (AckMode.BATCH):
- *   ack.acknowledge() is called AFTER the batch is fully processed and persisted.
- *   If the consumer crashes mid-batch, Kafka redelivers the unacknowledged batch
- *   on restart — at-least-once delivery. Downstream processing must be idempotent
- *   (ON CONFLICT DO NOTHING in SQL, Redis SET NX, etc.).
- *
- * Concurrency:
- *   Spring Kafka creates one consumer thread per concurrency setting.
- *   With 6 partitions and concurrency=3, each thread handles 2 partitions.
- *   Scale to concurrency=6 for max throughput (one thread per partition).
+ * Offsets are committed only after the full batch is processed and persisted —
+ * at-least-once delivery. Downstream writes must be idempotent (ON CONFLICT DO NOTHING).
+ * Deserialization errors skip the bad record without failing the whole batch.
  */
 @Slf4j
 @Component

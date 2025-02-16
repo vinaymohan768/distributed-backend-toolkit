@@ -13,28 +13,12 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Async task processor demonstrating CompletableFuture composition patterns.
+ * CompletableFuture patterns for async processing.
  *
- * Key patterns:
- *
- * 1. @Async + CompletableFuture
- *    Spring's @Async runs the method on the taskExecutor thread pool defined in AsyncConfig.
- *    Returns CompletableFuture so callers can compose, await, or fire-and-forget.
- *
- * 2. Fan-out/fan-in
- *    processInParallel() splits work across N futures and joins on allOf().
- *    Useful for calling multiple downstream services simultaneously and
- *    aggregating results — e.g., fetching device metadata + telemetry + alerts
- *    in parallel rather than sequentially.
- *
- * 3. Pipeline composition with thenApply / thenCompose
- *    processWithPipeline() chains transformation stages without blocking threads
- *    between stages. Each stage runs on the executor when the previous completes.
- *
- * 4. Exception handling with exceptionally()
- *    Catches failures at each stage. A failed enrichment step returns a
- *    degraded result rather than failing the whole pipeline — important for
- *    resilience in distributed systems where partial failures are normal.
+ * processAsync:       single task, fire on taskExecutor, return future to caller
+ * processInParallel:  fan-out N tasks, join on allOf(), collect results
+ * processWithPipeline: validate → enrich → transform, with graceful degradation
+ *                      if enrich fails (exceptionally returns raw input instead of throwing)
  */
 @Slf4j
 @Service

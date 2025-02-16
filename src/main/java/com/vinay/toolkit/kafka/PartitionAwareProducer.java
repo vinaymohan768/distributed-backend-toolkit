@@ -14,24 +14,12 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Partition-aware Kafka producer.
+ * Kafka producer that keys every message by entity ID (device_id, user_id, etc.)
+ * so all events for one entity land on the same partition via murmur2 hash.
  *
- * Partition affinity strategy:
- *   All messages for the same entity (device, user, order) are routed to the
- *   same partition by using the entity ID as the Kafka message key.
- *   Kafka's default partitioner applies murmur2 hash on the key, deterministically
- *   mapping each key to one partition.
- *
- *   Why this matters:
- *   - Ordering guarantees: Kafka only guarantees order within a partition.
- *     Key-based routing ensures all events for device-X arrive in sequence.
- *   - Stateful consumers: sliding-window detectors, session state, and aggregations
- *     can be maintained in-memory per consumer thread without distributed locking.
- *
- * Async send with callback:
- *   KafkaTemplate.send() is non-blocking. The returned CompletableFuture
- *   resolves when the broker acknowledges (acks=all). Failures are logged
- *   with structured context for alerting.
+ * This gives per-entity ordering guarantees and lets consumers maintain
+ * in-memory state (sliding windows, sessions) without distributed locking.
+ * Sends are async — callers get a CompletableFuture and decide whether to await.
  */
 @Slf4j
 @Component

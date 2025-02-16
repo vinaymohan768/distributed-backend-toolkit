@@ -17,25 +17,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Kafka configuration covering:
+ * Kafka producer + consumer configuration.
  *
- * Producer:
- *  - Idempotent producer (enable.idempotence=true) for exactly-once writes
- *  - acks=all ensures all ISR replicas confirm before returning
- *  - linger.ms=5 + batch.size=64KB for micro-batching throughput gains
- *  - LZ4 compression — best latency/ratio trade-off for telemetry payloads
- *
- * Consumer:
- *  - Batch listener: processes up to max-poll-records in one invocation
- *    reducing per-message overhead vs record-at-a-time processing
- *  - Manual AckMode.BATCH: commits offsets only after the full batch is
- *    processed and written downstream — prevents data loss on consumer crash
- *  - Concurrency=3: one thread per partition for parallel processing
- *    (set equal to partition count for maximum throughput)
- *
- * Topics created with 6 partitions — size for horizontal scaling:
- *  - 6 partitions allows up to 6 parallel consumer threads
- *  - Partition key = device_id ensures ordering per device
+ * Producer: idempotent (acks=all), linger.ms=5, batch.size=64KB, LZ4.
+ * Consumer: batch listener, AckMode.BATCH, manual offset commit, concurrency=3.
+ * Topics: 6 partitions — keyed by device_id for per-device ordering.
  */
 @Configuration
 public class KafkaConfig {
@@ -85,11 +71,7 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(config);
     }
 
-    /**
-     * Batch listener factory: delivers List<ConsumerRecord> to the @KafkaListener method.
-     * AckMode.BATCH commits the offset of the last record in the batch after the
-     * listener method returns without throwing — equivalent to at-least-once delivery.
-     */
+    /** Batch listener factory — delivers List<ConsumerRecord> per poll. */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =

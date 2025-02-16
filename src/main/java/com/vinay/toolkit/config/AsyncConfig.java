@@ -10,20 +10,11 @@ import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * Async thread pool configuration.
+ * Thread pool for @Async methods.
  *
- * Sizing rationale for I/O-bound workloads:
- *   - core-pool-size = number of CPU cores * 2 (default: 8)
- *     Threads block on I/O (DB, Redis, Kafka), so we can run more than CPU cores
- *   - max-pool-size = 32 — hard ceiling to prevent thread explosion
- *   - queue-capacity = 1000 — bounded queue provides backpressure
- *     When queue is full, CallerRunsPolicy executes on the calling thread,
- *     effectively throttling the producer without dropping work.
- *
- * CallerRunsPolicy vs AbortPolicy:
- *   - AbortPolicy (default): throws RejectedExecutionException — work is lost
- *   - CallerRunsPolicy: calling thread executes the task — provides natural
- *     backpressure without data loss. Correct choice for batch pipelines.
+ * core=8, max=32, queue=1000. CallerRunsPolicy on saturation — the calling
+ * thread executes the task rather than dropping it, giving natural backpressure
+ * without data loss (unlike AbortPolicy which throws and loses work).
  */
 @Configuration
 public class AsyncConfig {

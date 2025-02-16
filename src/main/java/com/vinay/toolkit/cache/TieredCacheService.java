@@ -16,29 +16,12 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 
 /**
- * Two-tier caching: L1 (Caffeine, in-process) → L2 (Redis, shared).
+ * Two-tier cache: L1 Caffeine (in-process, &lt;1μs) → L2 Redis (shared, ~1ms).
  *
- * Cache hierarchy:
- *   L1 — Caffeine (in-process heap)
- *     - Sub-millisecond reads, zero network cost
- *     - Small capacity (10K entries), short TTL (60s)
- *     - Private per JVM instance — consistent only within one node
- *
- *   L2 — Redis (shared network cache)
- *     - ~0.5–2ms reads, shared across all service instances
- *     - Large capacity (bounded by Redis memory), longer TTL (5m)
- *     - Source of truth for cache coherency in multi-instance deployments
- *
- * Read path:  L1 hit → return. L1 miss → L2 read → populate L1 → return.
- *             L2 miss → load from source → populate L2 + L1 → return.
- *
- * Write path: Write to source → invalidate L1 + L2.
- *             Write-through (writing to cache on write) is intentionally
- *             avoided — stale-on-write patterns cause subtle cache coherency
- *             bugs in distributed systems. Invalidate instead.
- *
- * This pattern is standard at companies running multi-instance stateful services
- * (read: Walmart-scale commerce APIs, financial platforms, etc.).
+ * Read:  L1 hit → return. Miss → check L2 → backfill L1 → return.
+ *        Full miss → load from source → populate both tiers.
+ * Write: invalidate L1 + L2. Write-through is intentionally skipped —
+ *        it causes coherency bugs across JVM instances. Invalidate instead.
  */
 @Slf4j
 @Service
@@ -70,14 +53,7 @@ public class TieredCacheService {
         this.missCounter   = meterRegistry.counter("cache.misses");
     }
 
-    /**
-     * Get a value from the tiered cache.
-     * Loads from source on full miss and populates both tiers.
-     *
-     * @param key       Cache key
-     * @param type      TypeReference for deserialization
-     * @param loader    Callable to load the value on cache miss
-     */
+    /** Read from L1 → L2 → loader. Populates tiers on miss. */
     public <T> Optional<T> get(String key, TypeReference<T> type, Callable<T> loader) {
         // L1 — Caffeine
         Cache l1 = caffeineCacheManager.getCache(L1_CACHE_NAME);
@@ -122,9 +98,7 @@ public class TieredCacheService {
         }
     }
 
-    /**
-     * Populate both cache tiers.
-     */
+    /** Write to L2 first (shared state), then backfill L1. */
     public <T> void put(String key, T value) {
         try {
             String json = objectMapper.writeValueAsString(value);
@@ -138,10 +112,7 @@ public class TieredCacheService {
         }
     }
 
-    /**
-     * Invalidate a key from both tiers.
-     * Call this after any write to the underlying data source.
-     */
+    /** Remove a key from both tiers. Call after any write to the source. */
     public void evict(String key) {
         redisTemplate.delete(key);
         Cache l1 = caffeineCacheManager.getCache(L1_CACHE_NAME);
@@ -149,10 +120,7 @@ public class TieredCacheService {
         log.debug("Evicted | key={}", key);
     }
 
-    /**
-     * Atomic increment in Redis — useful for rate limiting and counters.
-     * Redis INCR is O(1) and atomic; no distributed lock needed.
-     */
+    /** Atomic Redis increment — O(1), no lock needed. Sets TTL on first increment. */
     public long increment(String key, long delta, Duration ttl) {
         Long result = redisTemplate.opsForValue().increment(key, delta);
         if (result != null && result == delta) {

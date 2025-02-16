@@ -14,32 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * High-throughput PostgreSQL repository using batch inserts and optimized queries.
+ * PostgreSQL repository optimized for high-throughput event ingestion.
  *
- * Key patterns demonstrated:
- *
- * 1. JdbcTemplate batch insert (batchUpdate)
- *    Sends N rows in a single prepared statement execution.
- *    At batch-size=500, reduces DB round-trips by ~500x vs individual inserts.
- *    HikariCP connection pooling ensures connections are reused, not recreated.
- *
- * 2. ON CONFLICT DO NOTHING
- *    Idempotent inserts — safe to re-insert if Kafka redelivers a batch.
- *    Required for at-least-once delivery semantics without duplicate rows.
- *
- * 3. Partition pruning via timestamp filter
- *    All queries include event_timestamp in the WHERE clause.
- *    PostgreSQL uses partition pruning to scan only the relevant monthly partition,
- *    keeping query time flat as total data grows (avoids full table scans).
- *
- * 4. Composite index exploitation
- *    Queries filter on (device_id, event_timestamp DESC) — matching the composite
- *    B-tree index defined in schema.sql. PostgreSQL uses index-only scans for
- *    this access pattern, returning results without touching the heap.
- *
- * 5. Read/write split via @Transactional(readOnly=true)
- *    Marks read queries as read-only, allowing Spring/HikariCP to route them
- *    to a read replica if configured (standard production pattern for scaling reads).
+ * batchUpdate at page_size=500 cuts DB round-trips by ~500x vs row-at-a-time.
+ * ON CONFLICT DO NOTHING makes inserts idempotent — safe for Kafka at-least-once redelivery.
+ * Timestamp in every WHERE clause enables partition pruning on the monthly range partition.
+ * readOnly=true on reads lets HikariCP route to a read replica when configured.
  */
 @Slf4j
 @Repository

@@ -1,27 +1,39 @@
-# distributed-backend-toolkit
+# Distributed Backend Toolkit
 
-Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3. Covers Kafka partition-aware scaling, two-tier Redis caching, async processing with CompletableFuture, and high-throughput PostgreSQL batch operations — each pattern documented with the engineering rationale behind the design choices.
+![CI](https://github.com/vinaymohan768/distributed-backend-toolkit/actions/workflows/ci.yml/badge.svg)
+![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-6DB33F?logo=springboot&logoColor=white)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7-231F20?logo=apachekafka&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
+Production-grade distributed backend patterns in Java 21 / Spring Boot 3. Four self-contained modules — Kafka partition-aware scaling, two-tier Redis caching, async CompletableFuture pipelines, and high-throughput PostgreSQL batch operations — each with runnable benchmarks and the engineering rationale behind every design choice.
 
 ---
 
-## Patterns Included
+## Patterns
 
 ### 1. Kafka — Partition-aware producer + batch consumer
 
+```
+Producer → murmur2(device_id) → deterministic partition → ordered per device
+Consumer → batch poll (max 500 records) → process → persist → ack offset
+```
+
 **`kafka/PartitionAwareProducer.java`**
-- Keys every message by entity ID (device_id) → deterministic partition routing via murmur2 hash
-- Idempotent producer (`enable.idempotence=true`) prevents duplicate writes on retry
-- Micro-batching: `linger.ms=5` + `batch.size=64KB` + LZ4 compression for throughput
-- Async send via `CompletableFuture` — non-blocking with structured error logging
+- Keyed by entity ID → murmur2 hash → same partition, guaranteed per-entity ordering
+- Idempotent producer (`enable.idempotence=true`) — no duplicates on broker retry
+- `linger.ms=5` + `batch.size=64KB` + LZ4 — micro-batching for throughput without sacrificing latency
+- Non-blocking async send via `CompletableFuture` with structured error logging
 
 **`kafka/BatchConsumer.java`**
-- Batch listener: receives `List<ConsumerRecord>` instead of one record at a time
-- `AckMode.BATCH`: commits offset only after entire batch is processed and persisted
-- Concurrency=3 (configurable): one thread per 2 partitions, scales to 6 for max throughput
-- Graceful degradation: deserialization errors skip the record, don't fail the batch
+- `@KafkaListener` batch mode — receives `List<ConsumerRecord>` per poll cycle
+- `AckMode.BATCH` — commits offset only after the entire batch is persisted; Kafka redelivers on crash
+- Deserialization errors skip the bad record without dropping the rest of the batch
+- `concurrency=3` → scale to 6 (one thread per partition) for max throughput
 
-**Why partition affinity?**
-With device events keyed by device_id, all reads for a given device land on one partition, consumed by one thread — stateful in-memory processing (sliding windows, session state, LRU caches) with zero distributed coordination.
+**Why partition affinity?** All events for `device-X` land on one partition, consumed by one thread. Stateful in-memory processing (sliding windows, session state) with zero distributed coordination.
 
 ---
 
@@ -30,18 +42,18 @@ With device events keyed by device_id, all reads for a given device land on one 
 **`cache/TieredCacheService.java`**
 
 ```
-Read: L1 (Caffeine, ~0μs) → L2 (Redis, ~1ms) → Source DB → populate both tiers
-Write: Update source → evict L1 + L2 (invalidation, not write-through)
+Read:  L1 Caffeine (<1μs) → L2 Redis (~1ms) → source DB → populate both tiers
+Write: update source → invalidate L1 + L2
 ```
 
 | Tier | Implementation | Latency | Scope | TTL |
-|---|---|---|---|---|
-| L1 | Caffeine (heap) | < 1μs | Per JVM | 60s |
-| L2 | Redis (Lettuce) | ~1ms | Shared | 5m |
+|------|---------------|---------|-------|-----|
+| L1   | Caffeine (heap) | < 1μs | Per JVM | 60s |
+| L2   | Redis (Lettuce) | ~1ms  | Shared  | 5m  |
 
-- Invalidation on write (not write-through) avoids cache coherency bugs in multi-instance deployments
-- Atomic Redis `INCR` for distributed counters and rate limiting — O(1), no lock needed
-- Metrics: L1 hit rate, L2 hit rate, miss rate via Micrometer counters
+- **Invalidation on write** (not write-through) — avoids cache coherency bugs when multiple service instances share L2
+- **Atomic Redis `INCR`** for rate limiting counters — O(1), no distributed lock
+- Micrometer counters for L1 hit rate, L2 hit rate, and miss rate via `/actuator/prometheus`
 
 ---
 
@@ -49,22 +61,21 @@ Write: Update source → evict L1 + L2 (invalidation, not write-through)
 
 **`async/AsyncTaskProcessor.java`**
 
-Three patterns demonstrated:
-
-**Fan-out/fan-in**: Process N tasks in parallel, join on `allOf()`:
+**Fan-out/fan-in** — parallel task processing, join on `allOf()`:
 ```java
-CompletableFuture.allOf(futures.toArray(...)).thenApply(v -> collectResults())
+CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+    .thenApply(v -> futures.stream().map(CompletableFuture::join).toList());
 ```
 
-**Pipeline composition**: Chain stages without blocking threads between them:
+**Pipeline composition** — chain stages without blocking threads between them:
 ```java
-validate(input)
-  .thenApplyAsync(this::enrich)
-  .exceptionally(ex -> degradedResult)  // enrich failed — don't fail the pipeline
-  .thenApplyAsync(this::transform)
+CompletableFuture.supplyAsync(() -> validate(input))
+    .thenApplyAsync(this::enrich)
+    .exceptionally(ex -> input)      // enrich failed → degrade gracefully
+    .thenApplyAsync(this::transform);
 ```
 
-**CallerRunsPolicy**: When the task queue is full, the calling thread executes the task — natural backpressure without data loss (vs `AbortPolicy` which throws and loses work).
+**CallerRunsPolicy** — when the task queue fills up, the calling thread executes the task instead of throwing `RejectedExecutionException`. Natural backpressure without data loss.
 
 ---
 
@@ -72,17 +83,17 @@ validate(input)
 
 **`db/BatchRepository.java`**
 
-- `JdbcTemplate.batchUpdate()` with page size=500: ~500x fewer DB round-trips vs individual inserts
-- `ON CONFLICT DO NOTHING`: idempotent inserts — safe for Kafka at-least-once redelivery
-- `@Transactional(readOnly=true)`: routes read queries to replica when HikariCP is configured for read/write split
-- Partition pruning: all queries include `event_timestamp` in WHERE clause — PostgreSQL scans only the relevant monthly partition
+- `JdbcTemplate.batchUpdate()` at `page_size=500` — ~500x fewer round-trips vs individual inserts
+- `ON CONFLICT DO NOTHING` — idempotent inserts, safe for Kafka at-least-once redelivery
+- `@Transactional(readOnly=true)` — routes reads to replica when HikariCP is configured for read/write split
+- `event_timestamp` in every WHERE clause → PostgreSQL partition pruning on monthly range partitions
 
 **`db/schema.sql`** index strategy:
 ```sql
--- Composite B-tree: covers device + time queries (index-only scan, no heap access)
+-- Composite B-tree: covers (device_id, time) queries — index-only scan, no heap read
 CREATE INDEX idx_events_device_time ON events (device_id, event_timestamp DESC);
 
--- Partial index: only critical events — tiny, fast for dashboard queries
+-- Partial index: only critical events — tiny index, fast dashboard queries
 CREATE INDEX idx_events_critical ON events (event_timestamp DESC)
 WHERE event_type = 'critical';
 
@@ -94,34 +105,36 @@ CREATE INDEX idx_events_payload ON events USING GIN (payload);
 
 ## Getting Started
 
+**Requirements:** Docker, Docker Compose, Java 21 (for local dev)
+
 ```bash
 git clone https://github.com/vinaymohan768/distributed-backend-toolkit
 cd distributed-backend-toolkit
 docker compose up --build
 ```
 
-API at `http://localhost:8080` · Actuator metrics at `http://localhost:8080/actuator/prometheus`
+API at `http://localhost:8080` · Metrics at `http://localhost:8080/actuator/prometheus`
 
 ---
 
 ## Benchmark Endpoints
 
-Each pattern has a built-in benchmark endpoint to measure real numbers:
+Each pattern has a built-in benchmark — run real numbers against your own machine:
 
 ```bash
-# Kafka: produce 1000 events, report throughput
+# Kafka: produce 1000 events across 10 devices, report throughput
 curl -X POST "http://localhost:8080/api/v1/benchmark/kafka/produce?count=1000&deviceCount=10"
 
-# Cache: 10K reads, report L1 latency
+# Cache: 10K reads, report L1 vs L2 hit rate
 curl "http://localhost:8080/api/v1/benchmark/cache?reads=10000"
 
-# DB: batch insert 5000 rows, report throughput
+# DB: batch insert 5000 rows, report rows/sec
 curl -X POST "http://localhost:8080/api/v1/benchmark/db/batch-insert?rows=5000"
 
-# Async: fan-out 200 tasks in parallel
+# Async: fan-out 200 parallel tasks, report wall-clock vs sequential time
 curl -X POST "http://localhost:8080/api/v1/benchmark/async/parallel?taskCount=200"
 
-# Query recent device events
+# Query recent events for a device
 curl "http://localhost:8080/api/v1/devices/DEV-00001/events?limit=50"
 ```
 
@@ -133,29 +146,31 @@ curl "http://localhost:8080/api/v1/devices/DEV-00001/events?limit=50"
 distributed-backend-toolkit/
 ├── src/main/java/com/vinay/toolkit/
 │   ├── config/
-│   │   ├── KafkaConfig.java        # Producer + consumer factory, topic declarations
-│   │   ├── RedisConfig.java        # Lettuce connection, String serialization
-│   │   └── AsyncConfig.java        # ThreadPoolTaskExecutor, CallerRunsPolicy
+│   │   ├── KafkaConfig.java          # Producer factory, consumer factory, topic declarations
+│   │   ├── RedisConfig.java          # Lettuce connection pool, String serialization
+│   │   └── AsyncConfig.java          # ThreadPoolTaskExecutor, CallerRunsPolicy
 │   ├── kafka/
-│   │   ├── PartitionAwareProducer  # Key-based routing, idempotent, async send
-│   │   └── BatchConsumer           # Batch listener, manual AckMode.BATCH
+│   │   ├── PartitionAwareProducer.java  # Key-based routing, idempotent, async send
+│   │   └── BatchConsumer.java           # Batch listener, AckMode.BATCH, error isolation
 │   ├── cache/
-│   │   └── TieredCacheService      # L1 Caffeine + L2 Redis, invalidation pattern
+│   │   └── TieredCacheService.java   # L1 Caffeine + L2 Redis, invalidation, rate limiting
 │   ├── db/
-│   │   └── BatchRepository         # batchUpdate, partition pruning, readOnly tx
+│   │   └── BatchRepository.java      # batchUpdate, ON CONFLICT, partition pruning, readOnly tx
 │   ├── async/
-│   │   └── AsyncTaskProcessor      # Fan-out, pipeline, backpressure
+│   │   └── AsyncTaskProcessor.java   # Fan-out, pipeline, CallerRunsPolicy backpressure
 │   └── api/
-│       └── BenchmarkController     # Runnable benchmarks for each pattern
+│       └── BenchmarkController.java  # Runnable benchmarks for each pattern
 ├── db/
-│   └── schema.sql                  # Partitioned table, composite + partial + GIN indexes
-├── docker-compose.yml              # Kafka + PostgreSQL + Redis + App
-├── Dockerfile                      # Multi-stage Maven build
-└── pom.xml                         # Spring Boot 3, Kafka, Redis, Resilience4j
+│   └── schema.sql                    # Partitioned table, composite + partial + GIN indexes
+├── src/main/resources/
+│   └── application.yml               # Full HikariCP, Kafka, Redis, async config
+├── docker-compose.yml                # Kafka + Zookeeper + PostgreSQL + Redis + App
+├── Dockerfile                        # Multi-stage Maven build, non-root, G1GC flags
+└── pom.xml
 ```
 
 ---
 
-## Tech Stack
+## Stack
 
-`Java 21` `Spring Boot 3.2` `Apache Kafka` `Redis (Lettuce)` `PostgreSQL 16` `HikariCP` `Caffeine` `Resilience4j` `Micrometer` `Docker Compose`
+`Java 21` · `Spring Boot 3.2` · `Apache Kafka 3.7` · `Redis 7 (Lettuce)` · `PostgreSQL 16` · `HikariCP` · `Caffeine` · `Micrometer` · `Prometheus` · `Docker Compose`

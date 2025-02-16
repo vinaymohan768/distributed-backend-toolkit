@@ -57,7 +57,7 @@ public class BenchmarkController {
 
         long start = System.currentTimeMillis();
 
-        List<CompletableFuture<?>> futures = IntStream.range(0, count)
+        List<Map.Entry<String, Object>> events = IntStream.range(0, count)
                 .mapToObj(i -> {
                     String deviceId = "DEV-" + String.format("%05d", i % deviceCount);
                     Map<String, Object> payload = Map.of(
@@ -65,11 +65,11 @@ public class BenchmarkController {
                             "cpu", 40 + (i % 50),
                             "timestamp", System.currentTimeMillis()
                     );
-                    return producer.send("device-events", deviceId, payload);
+                    return Map.entry(deviceId, (Object) payload);
                 })
                 .toList();
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        producer.sendBatch("device-events", events).join();
         long elapsed = System.currentTimeMillis() - start;
 
         return Map.of(

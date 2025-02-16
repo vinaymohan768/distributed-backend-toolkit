@@ -53,7 +53,7 @@ public class BatchRepository {
                 ON CONFLICT (device_id, event_timestamp) DO NOTHING
                 """;
 
-        int[] results = batchInsertTimer.record(() ->
+        int[][] results = batchInsertTimer.record(() ->
                 jdbc.batchUpdate(sql, events, batchSize, (ps, event) -> {
                     ps.setString(1, (String) event.get("device_id"));
                     ps.setString(2, (String) event.getOrDefault("event_type", "unknown"));
@@ -66,8 +66,10 @@ public class BatchRepository {
         );
 
         int total = 0;
-        for (int[] batch : results) {
-            for (int r : batch) total += Math.max(r, 0);
+        if (results != null) {
+            for (int[] batch : results) {
+                for (int r : batch) total += Math.max(r, 0);
+            }
         }
 
         log.debug("Batch insert | rows_attempted={} rows_inserted={}", events.size(), total);

@@ -27,28 +27,25 @@ class BatchConsumerTest {
     @Test
     void consume_acknowledgesOffsetAfterProcessing() {
         List<ConsumerRecord<String, String>> records = List.of(
-                record("device-1", """{"device_id":"device-1","value":42}"""),
-                record("device-2", """{"device_id":"device-2","value":99}""")
+                record("device-1", "{\"device_id\":\"device-1\",\"value\":42}"),
+                record("device-2", "{\"device_id\":\"device-2\",\"value\":99}")
         );
 
         consumer.consume(records, ack);
 
-        // Offset must be committed after successful processing
         verify(ack, times(1)).acknowledge();
     }
 
     @Test
     void consume_skipsInvalidJsonWithoutFailingBatch() {
         List<ConsumerRecord<String, String>> records = List.of(
-                record("device-1", """{"device_id":"device-1"}"""),
-                record("device-2", "NOT_VALID_JSON"),   // bad record
-                record("device-3", """{"device_id":"device-3"}""")
+                record("device-1", "{\"device_id\":\"device-1\"}"),
+                record("device-2", "NOT_VALID_JSON"),
+                record("device-3", "{\"device_id\":\"device-3\"}")
         );
 
-        // Should not throw — bad record is skipped, rest of batch proceeds
         consumer.consume(records, ack);
 
-        // Offset still committed for the valid records
         verify(ack, times(1)).acknowledge();
     }
 
@@ -72,7 +69,7 @@ class BatchConsumerTest {
         };
 
         consumerWithHook.consume(
-                List.of(record("device-1", """{"id":"1"}""")),
+                List.of(record("device-1", "{\"id\":\"1\"}")),
                 ack
         );
 

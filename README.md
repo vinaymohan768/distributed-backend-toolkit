@@ -25,7 +25,7 @@ With device events keyed by device_id, all reads for a given device land on one 
 
 ---
 
-### 2. Redis — Two-tier cache (L1 Caffeine + L2 Redis)
+### 2. Redis  Two-tier cache (L1 Caffeine + L2 Redis)
 
 **`cache/TieredCacheService.java`**
 
@@ -45,7 +45,7 @@ Write: Update source → evict L1 + L2 (invalidation, not write-through)
 
 ---
 
-### 3. Async — CompletableFuture pipeline patterns
+### 3. Async  CompletableFuture pipeline patterns
 
 **`async/AsyncTaskProcessor.java`**
 

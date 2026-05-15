@@ -6,7 +6,7 @@ Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3.
 
 ## Patterns Included
 
-### 1. Kafka — Partition-aware producer + batch consumer
+### 1. Kafka  Partition-aware producer + batch consumer
 
 **`kafka/PartitionAwareProducer.java`**
 - Keys every message by entity ID (device_id) → deterministic partition routing via murmur2 hash

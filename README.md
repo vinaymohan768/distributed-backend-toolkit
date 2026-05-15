@@ -1,6 +1,6 @@
 # distributed-backend-toolkit
 
-Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3. Covers Kafka partition-aware scaling, two-tier Redis caching, async processing with CompletableFuture, and high-throughput PostgreSQL batch operations — each pattern documented with the engineering rationale behind the design choices.
+Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3. Covers Kafka partition-aware scaling, two-tier Redis caching, async processing with CompletableFuture, and high-throughput PostgreSQL batch operations  each pattern documented with the engineering rationale behind the design choices.
 
 ---
 
@@ -12,7 +12,7 @@ Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3.
 - Keys every message by entity ID (device_id) → deterministic partition routing via murmur2 hash
 - Idempotent producer (`enable.idempotence=true`) prevents duplicate writes on retry
 - Micro-batching: `linger.ms=5` + `batch.size=64KB` + LZ4 compression for throughput
-- Async send via `CompletableFuture` — non-blocking with structured error logging
+- Async send via `CompletableFuture`  non-blocking with structured error logging
 
 **`kafka/BatchConsumer.java`**
 - Batch listener: receives `List<ConsumerRecord>` instead of one record at a time
@@ -21,7 +21,7 @@ Reusable distributed backend infrastructure patterns in Java 21 / Spring Boot 3.
 - Graceful degradation: deserialization errors skip the record, don't fail the batch
 
 **Why partition affinity?**
-With device events keyed by device_id, all reads for a given device land on one partition, consumed by one thread — stateful in-memory processing (sliding windows, session state, LRU caches) with zero distributed coordination.
+With device events keyed by device_id, all reads for a given device land on one partition, consumed by one thread  stateful in-memory processing (sliding windows, session state, LRU caches) with zero distributed coordination.
 
 ---
 
@@ -40,7 +40,7 @@ Write: Update source → evict L1 + L2 (invalidation, not write-through)
 | L2 | Redis (Lettuce) | ~1ms | Shared | 5m |
 
 - Invalidation on write (not write-through) avoids cache coherency bugs in multi-instance deployments
-- Atomic Redis `INCR` for distributed counters and rate limiting — O(1), no lock needed
+- Atomic Redis `INCR` for distributed counters and rate limiting  O(1), no lock needed
 - Metrics: L1 hit rate, L2 hit rate, miss rate via Micrometer counters
 
 ---
@@ -64,16 +64,16 @@ validate(input)
   .thenApplyAsync(this::transform)
 ```
 
-**CallerRunsPolicy**: When the task queue is full, the calling thread executes the task — natural backpressure without data loss (vs `AbortPolicy` which throws and loses work).
+**CallerRunsPolicy**: When the task queue is full, the calling thread executes the task  natural backpressure without data loss (vs `AbortPolicy` which throws and loses work).
 
 ---
 
-### 4. PostgreSQL — High-throughput batch operations
+### 4. PostgreSQL  High-throughput batch operations
 
 **`db/BatchRepository.java`**
 
 - `JdbcTemplate.batchUpdate()` with page size=500: ~500x fewer DB round-trips vs individual inserts
-- `ON CONFLICT DO NOTHING`: idempotent inserts — safe for Kafka at-least-once redelivery
+- `ON CONFLICT DO NOTHING`: idempotent inserts  safe for Kafka at-least-once redelivery
 - `@Transactional(readOnly=true)`: routes read queries to replica when HikariCP is configured for read/write split
 - Partition pruning: all queries include `event_timestamp` in WHERE clause — PostgreSQL scans only the relevant monthly partition
 
@@ -82,7 +82,7 @@ validate(input)
 -- Composite B-tree: covers device + time queries (index-only scan, no heap access)
 CREATE INDEX idx_events_device_time ON events (device_id, event_timestamp DESC);
 
--- Partial index: only critical events — tiny, fast for dashboard queries
+-- Partial index: only critical events  tiny, fast for dashboard queries
 CREATE INDEX idx_events_critical ON events (event_timestamp DESC)
 WHERE event_type = 'critical';
 
@@ -131,27 +131,27 @@ curl "http://localhost:8080/api/v1/devices/DEV-00001/events?limit=50"
 
 ```
 distributed-backend-toolkit/
-├── src/main/java/com/vinay/toolkit/
-│   ├── config/
-│   │   ├── KafkaConfig.java        # Producer + consumer factory, topic declarations
-│   │   ├── RedisConfig.java        # Lettuce connection, String serialization
-│   │   └── AsyncConfig.java        # ThreadPoolTaskExecutor, CallerRunsPolicy
-│   ├── kafka/
-│   │   ├── PartitionAwareProducer  # Key-based routing, idempotent, async send
-│   │   └── BatchConsumer           # Batch listener, manual AckMode.BATCH
-│   ├── cache/
-│   │   └── TieredCacheService      # L1 Caffeine + L2 Redis, invalidation pattern
-│   ├── db/
-│   │   └── BatchRepository         # batchUpdate, partition pruning, readOnly tx
-│   ├── async/
-│   │   └── AsyncTaskProcessor      # Fan-out, pipeline, backpressure
-│   └── api/
-│       └── BenchmarkController     # Runnable benchmarks for each pattern
-├── db/
-│   └── schema.sql                  # Partitioned table, composite + partial + GIN indexes
-├── docker-compose.yml              # Kafka + PostgreSQL + Redis + App
-├── Dockerfile                      # Multi-stage Maven build
-└── pom.xml                         # Spring Boot 3, Kafka, Redis, Resilience4j
+├   src/main/java/com/vinay/toolkit/
+│   ├   config/
+│   │   ├   KafkaConfig.java        # Producer + consumer factory, topic declarations
+│   │   ├   RedisConfig.java        # Lettuce connection, String serialization
+│   │   └   AsyncConfig.java        # ThreadPoolTaskExecutor, CallerRunsPolicy
+│   ├   kafka/
+│   │   ├   PartitionAwareProducer  # Key-based routing, idempotent, async send
+│   │   └   BatchConsumer           # Batch listener, manual AckMode.BATCH
+│   ├   cache/
+│   │   └   TieredCacheService      # L1 Caffeine + L2 Redis, invalidation pattern
+│   ├   db/
+│   │   └   BatchRepository         # batchUpdate, partition pruning, readOnly tx
+│   ├   async/
+│   │   └   AsyncTaskProcessor      # Fan-out, pipeline, backpressure
+│   └   api/
+│       └   BenchmarkController     # Runnable benchmarks for each pattern
+├   db/
+│   └   schema.sql                  # Partitioned table, composite + partial + GIN indexes
+├   docker-compose.yml              # Kafka + PostgreSQL + Redis + App
+├   Dockerfile                      # Multi-stage Maven build
+└   pom.xml                         # Spring Boot 3, Kafka, Redis, Resilience4j
 ```
 
 ---

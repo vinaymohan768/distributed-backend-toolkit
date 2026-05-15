@@ -75,7 +75,7 @@ validate(input)
 - `JdbcTemplate.batchUpdate()` with page size=500: ~500x fewer DB round-trips vs individual inserts
 - `ON CONFLICT DO NOTHING`: idempotent inserts  safe for Kafka at-least-once redelivery
 - `@Transactional(readOnly=true)`: routes read queries to replica when HikariCP is configured for read/write split
-- Partition pruning: all queries include `event_timestamp` in WHERE clause — PostgreSQL scans only the relevant monthly partition
+- Partition pruning: all queries include `event_timestamp` in WHERE clause  PostgreSQL scans only the relevant monthly partition
 
 **`db/schema.sql`** index strategy:
 ```sql

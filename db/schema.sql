@@ -1,6 +1,6 @@
 -- schema.sql — distributed-backend-toolkit
 
--- ── Events table (range-partitioned by month) ──────────────────────────────
+--  Events table (range-partitioned by month) ──────────────────────────────
 CREATE TABLE IF NOT EXISTS events (
     id              BIGSERIAL,
     device_id       VARCHAR(20)     NOT NULL,
